@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IT Equipment Inventory</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#F5F5F5; --panel:#FFFFFF; --ink:#1F1E1A; --ink-soft:#666666; --ink-faint:#999999;
+    --line:#E0E0E0; --line-soft:#EEEEEE;
+    --accent:#0066CC; --accent-100:#E6F1FB; --accent-700:#004B99;
+    --danger:#D32F2F; --danger-100:#FFEBEE;
+    --warn:#F57C00; --warn-100:#FFF3E0;
+    --idle:#9E9E9E; --idle-100:#F5F5F5;
+    --info:#0066CC; --info-100:#E6F1FB;
+    --radius:10px; --radius-lg:14px;
+    --shadow:0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;}
+  .hidden{display:none !important;}
+
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .login-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:36px 32px;max-width:380px;width:100%;box-shadow:var(--shadow);}
+  .login-mark{width:44px;height:44px;border-radius:10px;background:var(--ink);display:flex;align-items:center;justify-content:center;margin-bottom:18px;}
+  .login-mark svg{width:24px;height:24px;}
+  .login-card h1{font-size:19px;font-weight:700;margin:0 0 4px;}
+  .login-card p{font-size:13px;color:var(--ink-soft);margin:0 0 22px;}
+  .login-field{margin-bottom:14px;}
+  .login-field label{display:block;font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.03em;}
+  .login-error{background:var(--danger-100);color:var(--danger);font-size:12.5px;font-weight:600;padding:9px 12px;border-radius:8px;margin-bottom:14px;}
+
+  .app{max-width:1180px;margin:0 auto;padding:20px 16px 80px;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{width:38px;height:38px;border-radius:10px;background:var(--ink);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .brand-mark svg{width:20px;height:20px;}
+  .brand-text h1{font-size:17px;font-weight:700;margin:0;letter-spacing:-0.01em;}
+  .brand-text p{font-size:12px;color:var(--ink-soft);margin:1px 0 0;}
+  .topbar-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .user-pill{font-size:12px;color:var(--ink-soft);padding:7px 10px;background:var(--line-soft);border-radius:8px;}
+  .role-badge{font-size:11px;color:#fff;font-weight:700;padding:5px 9px;border-radius:6px;}
+  .role-badge.admin{background:var(--accent);}
+  .role-badge.viewer{background:var(--info);}
+
+  .btn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:13px;font-weight:600;padding:9px 14px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:background .12s,border-color .12s;font-family:inherit;}
+  .btn:hover{background:var(--line-soft);border-color:var(--ink-faint);}
+  .btn:active{transform:scale(0.98);}
+  .btn:disabled{opacity:0.5;cursor:not-allowed;}
+  .btn-primary{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .btn-primary:hover{background:#000;}
+  .btn-danger-outline{color:var(--danger);border-color:#E8C9C9;}
+  .btn-danger-outline:hover{background:var(--danger-100);}
+  .btn svg{width:15px;height:15px;}
+  .btn-sm{padding:6px 10px;font-size:12px;}
+
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px;}
+  .metric{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow);cursor:pointer;}
+  .metric .num{font-size:24px;font-weight:700;letter-spacing:-0.02em;line-height:1.1;}
+  .metric .lbl{font-size:12px;color:var(--ink-soft);margin-top:3px;font-weight:600;}
+  .metric.alert .num{color:var(--danger);}
+  .metric.warn .num{color:var(--warn);}
+
+  .controls{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
+  .search-wrap{position:relative;flex:1;min-width:180px;}
+  .search-wrap svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--ink-faint);pointer-events:none;}
+  input[type="text"],input[type="date"],input[type="email"],input[type="password"],select,textarea{width:100%;font-size:13.5px;font-family:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:9px 12px;outline:none;transition:border-color .12s;}
+  .search-wrap input{padding-left:34px;}
+  input:focus,select:focus,textarea:focus{border-color:var(--ink-faint);box-shadow:0 0 0 3px rgba(15,110,86,0.08);}
+  select{appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B6A63' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px;}
+  .filter-chip{flex-shrink:0;min-width:120px;max-width:160px;}
+
+  .table-wrap{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow);overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{text-align:left;font-size:11.5px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.04em;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--line-soft);white-space:nowrap;}
+  tbody td{padding:11px 14px;border-bottom:1px solid var(--line-soft);vertical-align:middle;white-space:nowrap;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr{cursor:pointer;transition:background .1s;}
+  tbody tr:hover{background:var(--line-soft);}
+  .cell-main{font-weight:600;}
+  .cell-sub{font-size:11.5px;color:var(--ink-faint);margin-top:1px;}
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:6px;white-space:nowrap;}
+  .badge-active{background:var(--accent-100);color:var(--accent-700);}
+  .badge-idle{background:var(--idle-100);color:var(--idle);}
+  .badge-faulty{background:var(--danger-100);color:var(--danger);}
+  .badge-under-repair{background:var(--warn-100);color:var(--warn);}
+  .badge-retired,.badge-dead{background:#EDEAE0;color:var(--ink-faint);}
+  .type-icon{width:30px;height:30px;border-radius:8px;background:var(--line-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
+  .type-icon svg{width:16px;height:16px;color:var(--ink-soft);}
+  .type-icon img{width:100%;height:100%;object-fit:cover;}
+  .row-flex{display:flex;align-items:center;gap:10px;}
+  .missing-flag{display:inline-flex;align-items:center;gap:3px;color:var(--warn);font-size:11px;font-weight:700;background:var(--warn-100);padding:2px 7px;border-radius:5px;margin-left:6px;}
+  .missing-flag svg{width:11px;height:11px;}
+
+  .empty-state{padding:60px 20px;text-align:center;color:var(--ink-faint);}
+  .empty-state svg{width:40px;height:40px;margin-bottom:12px;opacity:0.5;}
+  .empty-state p{font-size:14px;margin:0;}
+  .loading-state{padding:60px 20px;text-align:center;color:var(--ink-faint);font-size:13px;}
+
+  .overlay{position:fixed;inset:0;background:rgba(31,30,26,0.45);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:30px 16px;overflow-y:auto;}
+  .overlay.open{display:flex;}
+  .modal{background:var(--panel);border-radius:16px;max-width:640px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,0.18);margin-bottom:30px;}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line);}
+  .modal-head h2{font-size:16px;font-weight:700;margin:0;}
+  .modal-close{width:28px;height:28px;border-radius:7px;border:none;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink-soft);}
+  .modal-close:hover{background:var(--line-soft);}
+  .modal-close svg{width:16px;height:16px;}
+  .modal-body{padding:20px 22px;max-height:65vh;overflow-y:auto;}
+  .modal-foot{display:flex;justify-content:space-between;gap:8px;padding:16px 22px;border-top:1px solid var(--line);}
+  .modal-foot-right{display:flex;gap:8px;}
+
+  .field-group{margin-bottom:14px;}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+  .field-label{display:block;font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.03em;}
+  .field-label .req{color:var(--danger);}
+  .section-divider{font-size:12px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.04em;margin:20px 0 12px;padding-top:14px;border-top:1px solid var(--line-soft);}
+  .section-divider:first-child{margin-top:0;padding-top:0;border-top:none;}
+
+  .delete-warning{background:var(--danger-100);color:var(--danger);font-size:13px;font-weight:600;padding:12px 14px;border-radius:9px;margin-bottom:14px;}
+  .delete-warning svg{width:16px;height:16px;vertical-align:middle;margin-right:6px;}
+
+  .history-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line-soft);}
+  .history-item:last-child{border-bottom:none;}
+  .history-dot{width:8px;height:8px;border-radius:50%;background:var(--info);margin-top:5px;flex-shrink:0;}
+  .history-content{flex:1;}
+  .history-content .ht{font-size:13px;font-weight:600;}
+  .history-content .hs{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .history-content .hd{font-size:11px;color:var(--ink-faint);margin-top:2px;}
+
+  .toast{position:fixed;bottom:20px;right:20px;background:var(--ink);color:#fff;font-size:13px;font-weight:600;padding:12px 18px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.2);z-index:100;opacity:0;transform:translateY(10px);transition:all .2s;max-width:340px;}
+  .toast.show{opacity:1;transform:translateY(0);}
+
+  .photo-upload-box{border:1.5px dashed var(--line);border-radius:12px;padding:16px;text-align:center;cursor:pointer;transition:border-color .12s;}
+  .photo-upload-box:hover{border-color:var(--ink-faint);}
+  .photo-preview{width:100%;max-height:160px;object-fit:contain;border-radius:8px;margin-bottom:10px;}
+
+  .import-summary{background:var(--accent-100);color:var(--accent-700);font-size:13px;padding:12px 14px;border-radius:10px;margin-bottom:12px;}
+
+  .report-badge{display:inline-block;background:var(--info-100);color:var(--info);font-size:11.5px;font-weight:700;padding:4px 8px;border-radius:6px;margin-left:8px;}
+
+  @media (max-width:560px){
+    .field-row{grid-template-columns:1fr;}
+    .topbar-actions{width:100%;}
+    .btn{flex:1;justify-content:center;}
+  }
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="login-wrap">
+  <div class="login-card">
+    <div class="login-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+    <h1>IT inventory</h1>
+    <p>Sign in to access the equipment register</p>
+    <div id="loginErrorBox"></div>
+    <div class="login-field"><label>Email</label><input type="email" id="loginEmail" placeholder="you@company.com"></div>
+    <div class="login-field"><label>Password</label><input type="password" id="loginPassword" placeholder="Your password"></div>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;justify-content:center;margin-top:6px;">Sign in</button>
+  </div>
+</div>
+
+<div id="mainApp" class="app hidden">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+      <div class="brand-text"><h1>IT inventory</h1><p id="deviceCountLabel">Loading...</p></div>
+    </div>
+    <div class="topbar-actions">
+      <span class="user-pill" id="userEmailLabel"></span>
+      <span class="role-badge" id="roleBadge"></span>
+      <button class="btn" id="importBtn" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import Excel</button>
+      <button class="btn" id="exportBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV</button>
+      <button class="btn btn-primary" id="addBtn" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add device</button>
+      <button class="btn" id="logoutBtn">Sign out</button>
+    </div>
+  </div>
+
+  <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" class="hidden">
+
+  <div class="metrics" id="metrics"></div>
+
+  <div class="controls">
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Search name, serial, user...">
+    </div>
+    <select class="filter-chip" id="filterType"><option value="">All categories</option></select>
+    <select class="filter-chip" id="filterStatus"><option value="">All status</option></select>
+    <select class="filter-chip" id="filterIncomplete">
+      <option value="">All records</option>
+      <option value="incomplete">Pending only</option>
+    </select>
+  </div>
+
+  <div class="table-wrap">
+    <table id="invTable">
+      <thead><tr><th>Device</th><th>Category</th><th>Assigned to</th><th>Department</th><th>Location</th><th>Status</th><th>Updated</th></tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div class="loading-state hidden" id="loadingState">Loading devices...</div>
+    <div class="empty-state" id="emptyState" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      <p id="emptyStateText">No devices yet. Click "Add device" to start building your inventory.</p>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head"><h2 id="modalTitle">Add device</h2><button class="modal-close" id="closeModal" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot">
+      <div><button class="btn btn-danger-outline" id="deleteBtn" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>Delete</button></div>
+      <div class="modal-foot-right"><button class="btn" id="cancelBtn">Cancel</button><button class="btn btn-primary" id="saveBtn">Save device</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="deleteConfirmOverlay">
+  <div class="modal">
+    <div class="modal-head"><h2>Confirm deletion</h2><button class="modal-close" id="closeDeleteConfirm" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="delete-warning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>This action cannot be undone.</div>
+      <div class="field-group">
+        <label class="field-label">Deletion reason <span class="req">*</span></label>
+        <select id="deletionReason">
+          <option value="">Select reason...</option>
+          <option value="Device broken/faulty">Device broken/faulty</option>
+          <option value="Sold/Transferred out">Sold/Transferred out</option>
+          <option value="Stolen">Stolen</option>
+          <option value="End of life">End of life</option>
+          <option value="Lost">Lost</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="field-group" id="otherReasonGroup" style="display:none;">
+        <label class="field-label">Please specify</label>
+        <textarea id="otherReason" rows="2" placeholder="Reason for deletion..."></textarea>
+      </div>
+      <p style="font-size:12px;color:var(--ink-soft);margin:14px 0 0;"><strong>Device:</strong> <span id="deleteDeviceName"></span><br><strong>Serial:</strong> <span id="deleteDeviceSerial"></span></p>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <div class="modal-foot-right">
+        <button class="btn" id="deleteCancel">Cancel</button>
+        <button class="btn btn-danger-outline" id="deleteConfirmBtn">Delete permanently</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="historyOverlay">
+  <div class="modal">
+    <div class="modal-head"><h2>Device history</h2><button class="modal-close" id="closeHistoryModal" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body" id="historyBody"></div>
+  </div>
+</div>
+
+<div class="overlay" id="importOverlay">
+  <div class="modal">
+    <div class="modal-head"><h2>Import from Excel</h2><button class="modal-close" id="closeImportModal" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body" id="importBody"></div>
+    <div class="modal-foot"><div></div><div class="modal-foot-right"><button class="btn" id="importCancelBtn">Close</button></div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://lwnlpaeymwmljyzwvnpd.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_8uWrqbi_cTC8NsvjY55XEA_6J2QLm5Z';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const NA = 'N/A';
+const VIEWER_EMAILS = ['hod@test.com'];
+
+const CATEGORIES = ["Desktop/PC", "Laptop", "Printer/Scanner", "Network Device", "Monitor/Accessories", "Face Scan Device", "Other"];
+const STATUS_OPTIONS = ["Active", "Idle", "Faulty", "Under Repair", "Retired", "Dead"];
+const STATUS_BADGE_CLASS = { "Active":"badge-active", "Idle":"badge-idle", "Faulty":"badge-faulty", "Under Repair":"badge-under-repair", "Retired":"badge-retired", "Dead":"badge-dead" };
+const WARRANTY_TYPES = [NA, "On-site", "Carry-in", "Return to base", "No warranty", "Extended warranty"];
+const DEPARTMENTS = [NA, "Accounts","Admin","Ceph","Engineering","ENGR","General Store","HQM","HR","IT","Production","QA (Quality Assurance)","QC","QC (Quality Control)","R&D","Striel","Supply-Chain","Technical Store","Validation","Vida","Warehouse","Other"];
+const LOCATIONS = [NA, "1st Floor","2nd Floor","3rd Floor","4th Floor","5th Floor","6th Floor","7th Floor","Other"];
+
+function buildCpuOptions(){ const opts = [NA]; for(let i=3;i<=9;i++) opts.push(`Intel Core i${i}`); opts.push("Intel Pentium","Intel Celeron","Intel Xeon","AMD Ryzen 3","AMD Ryzen 5","AMD Ryzen 7","AMD Ryzen 9","AMD Athlon","Apple M1","Apple M2","Apple M3","Other"); return opts; }
+const CPU_OPTIONS = buildCpuOptions();
+
+function buildGenerationOptions(){ const opts = [NA]; const ordinals = {1:'1st',2:'2nd',3:'3rd'}; for(let i=4;i<=14;i++) opts.push(`${ordinals[i] || i+'th'} Gen`); return opts; }
+const GENERATION_OPTIONS = buildGenerationOptions();
+
+function buildRamOptions(){ const opts = [NA]; const sizes = [8,16,32]; ["DDR4","DDR5"].forEach(ddr=>{ sizes.forEach(s=> opts.push(`${ddr} ${s}GB`)); }); opts.push("Other"); return opts; }
+const RAM_OPTIONS = buildRamOptions();
+
+function buildStorageOptions(prefixes){ const sizes = ["128GB","256GB","512GB","1TB","2TB"]; const opts = [NA]; prefixes.forEach(p=> sizes.forEach(s=> opts.push(`${p} ${s}`))); opts.push("Other"); return opts; }
+const SSD_OPTIONS = buildStorageOptions(["2.5\" SATA","NVMe"]);
+
+function buildHddOptions(){ const opts = [NA, "128GB","256GB","512GB"]; [1,2,3,4,6,8,10].forEach(t=> opts.push(`${t}TB`)); opts.push("Other"); return opts; }
+const HDD_OPTIONS = buildHddOptions();
+
+const TYPE_ICONS = {
+  "Desktop/PC": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+  "Laptop": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><line x1="2" y1="20" x2="22" y2="20"/></svg>',
+  "Printer/Scanner": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>',
+  "Network Device": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="14" width="16" height="6" rx="1"/><circle cx="8" cy="17" r="0.5" fill="currentColor"/><path d="M8 14v-3a4 4 0 0 1 4-4h0a4 4 0 0 1 4 4v3"/></svg>',
+  "Monitor/Accessories": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+  "Face Scan Device": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12h.01M15 12h.01M3 9V6a2 2 0 0 1 2-2h3M21 9V6a2 2 0 0 1-2-2h-3M3 15v3a2 2 0 0 0 2 2h3M21 15v3a2 2 0 0 1-2 2h-3"/></svg>',
+  "Other": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+};
+
+let inventory = [];
+let editingId = null;
+let currentUser = null;
+let userRole = 'admin';
+let pendingDeleteId = null;
+
+function escapeHtml(str){ const div = document.createElement('div'); div.textContent = str || ''; return div.innerHTML; }
+function showToast(msg){ const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2600); }
+function fmtDate(iso){ if(!iso) return '—'; const d = new Date(iso); return d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}); }
+function fmtDateTime(iso){ if(!iso) return '—'; const d = new Date(iso); return d.toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function selectHtml(id, options, current){ return `<select id="${id}"><option value="">Select...</option>${options.map(o=>`<option value="${escapeHtml(o)}" ${o===current?'selected':''}>${escapeHtml(o)}</option>`).join('')}</select>`; }
+
+/* ---------- AUTH ---------- */
+async function checkSession(){
+  const { data } = await sb.auth.getSession();
+  if(data.session){ currentUser = data.session.user; userRole = VIEWER_EMAILS.includes(currentUser.email) ? 'viewer' : 'admin'; showApp(); } else { showLogin(); }
+}
+function showLogin(){ document.getElementById('loginScreen').classList.remove('hidden'); document.getElementById('mainApp').classList.add('hidden'); }
+function showApp(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('mainApp').classList.remove('hidden');
+  document.getElementById('userEmailLabel').textContent = currentUser.email;
+  document.getElementById('roleBadge').textContent = userRole === 'admin' ? 'EDITOR' : 'REPORT VIEW';
+  document.getElementById('roleBadge').className = `role-badge ${userRole}`;
+  document.getElementById('addBtn').style.display = userRole === 'admin' ? 'inline-flex' : 'none';
+  document.getElementById('importBtn').style.display = userRole === 'admin' ? 'inline-flex' : 'none';
+  loadInventory();
+}
+document.getElementById('loginBtn').addEventListener('click', async ()=>{
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errBox = document.getElementById('loginErrorBox');
+  errBox.innerHTML = '';
+  if(!email || !password){ errBox.innerHTML = '<div class="login-error">Enter both email and password.</div>'; return; }
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = 'Signing in...';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  btn.disabled = false; btn.textContent = 'Sign in';
+  if(error){ errBox.innerHTML = `<div class="login-error">${escapeHtml(error.message)}</div>`; return; }
+  currentUser = data.user;
+  userRole = VIEWER_EMAILS.includes(currentUser.email) ? 'viewer' : 'admin';
+  showApp();
+});
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{ await sb.auth.signOut(); currentUser = null; showLogin(); });
+
+/* ---------- DATA ---------- */
+const REQUIRED_FOR_COMPLETE = ['category','status','device_name','company_serial_no','model','user_name','department','location','vendor','purchase_date','cpu','ram_gb'];
+
+function computeMissingFields(record){
+  const missing = [];
+  const fieldLabels = { category:'Category', status:'Status', device_name:'Device name', company_serial_no:'Serial number', model:'Model', user_name:'Assigned user', department:'Department', location:'Location', vendor:'Vendor', purchase_date:'Purchase date', cpu:'CPU', ram_gb:'RAM' };
+  REQUIRED_FOR_COMPLETE.forEach(f=>{
+    const val = record[f];
+    if(f==='user_name' && (record.status==='Retired' || record.status==='Dead')) return;
+    if(!val || val === '') missing.push(fieldLabels[f]);
+  });
+  return missing;
+}
+
+async function loadInventory(){
+  document.getElementById('loadingState').classList.remove('hidden');
+  document.getElementById('tableBody').innerHTML = '';
+  const { data, error } = await sb.from('devices').select('*').order('updated_at', { ascending: false });
+  document.getElementById('loadingState').classList.add('hidden');
+  if(error){ showToast('Failed to load: ' + error.message); inventory = []; } else { inventory = data || []; }
+  render();
+}
+
+function render(){ renderMetrics(); renderFilters(); renderTable(); }
+
+function renderMetrics(){
+  const total = inventory.length;
+  const active = inventory.filter(d=>d.status==='Active').length;
+  const faulty = inventory.filter(d=>d.status==='Faulty').length;
+  const pending = inventory.filter(d=>computeMissingFields(d).length>0).length;
+  document.getElementById('metrics').innerHTML = `
+    <div class="metric" data-metric="all"><div class="num">${total}</div><div class="lbl">Total devices</div></div>
+    <div class="metric" data-metric="active"><div class="num">${active}</div><div class="lbl">Active</div></div>
+    <div class="metric warn" data-metric="faulty"><div class="num">${faulty}</div><div class="lbl">Faulty</div></div>
+    <div class="metric alert" data-metric="pending"><div class="num">${pending}</div><div class="lbl">Pending records</div></div>
+  `;
+  document.getElementById('deviceCountLabel').textContent = total === 0 ? 'No devices recorded yet' : `${total} device${total===1?'':'s'} recorded`;
+  document.querySelectorAll('.metric').forEach(m=>{
+    m.addEventListener('click', ()=>{
+      const key = m.getAttribute('data-metric');
+      if(key==='active'){ document.getElementById('filterStatus').value='Active'; document.getElementById('filterIncomplete').value=''; }
+      else if(key==='faulty'){ document.getElementById('filterStatus').value='Faulty'; document.getElementById('filterIncomplete').value=''; }
+      else if(key==='pending'){ document.getElementById('filterStatus').value=''; document.getElementById('filterIncomplete').value='incomplete'; }
+      else { document.getElementById('filterStatus').value=''; document.getElementById('filterIncomplete').value=''; }
+      renderTable();
+    });
+  });
+}
+
+function renderFilters(){
+  const typeSel = document.getElementById('filterType');
+  const curType = typeSel.value;
+  typeSel.innerHTML = '<option value="">All categories</option>' + CATEGORIES.map(t=>`<option value="${t}">${t}</option>`).join('');
+  typeSel.value = curType;
+  const statusSel = document.getElementById('filterStatus');
+  const curStatus = statusSel.value;
+  statusSel.innerHTML = '<option value="">All status</option>' + STATUS_OPTIONS.map(s=>`<option value="${s}">${s}</option>`).join('');
+  statusSel.value = curStatus;
+}
+
+function getFilteredSorted(){
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const fType = document.getElementById('filterType').value;
+  const fStatus = document.getElementById('filterStatus').value;
+  const fIncomplete = document.getElementById('filterIncomplete').value;
+  return inventory.filter(d=>{
+    if(fType && d.category !== fType) return false;
+    if(fStatus && d.status !== fStatus) return false;
+    if(fIncomplete === 'incomplete' && computeMissingFields(d).length===0) return false;
+    if(q){
+      const hay = [d.device_name, d.company_serial_no, d.user_name, d.domain_id, d.location, d.model].filter(Boolean).join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable(){
+  const rows = getFilteredSorted();
+  const tbody = document.getElementById('tableBody');
+  const empty = document.getElementById('emptyState');
+  if(rows.length === 0){
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    document.getElementById('emptyStateText').textContent = inventory.length === 0 ? 'No devices yet. Click "Add device" to start building your inventory.' : 'No devices match your search or filters.';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = rows.map(d=>{
+    const missing = computeMissingFields(d);
+    const icon = d.photo_url ? `<img src="${escapeHtml(d.photo_url)}" alt="">` : (TYPE_ICONS[d.category] || TYPE_ICONS["Other"]);
+    const badgeClass = STATUS_BADGE_CLASS[d.status] || 'badge-idle';
+    return `
+      <tr data-id="${d.id}">
+        <td><div class="row-flex"><div class="type-icon">${icon}</div><div>
+          <div class="cell-main">${escapeHtml(d.device_name||'Unnamed')}${missing.length ? `<span class="missing-flag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${missing.length} pending</span>` : ''}</div>
+          <div class="cell-sub">${escapeHtml(d.company_serial_no || 'No serial')}</div>
+        </div></div></td>
+        <td>${d.category || '—'}</td>
+        <td>${escapeHtml(d.user_name || '—')}</td>
+        <td>${escapeHtml(d.department || '—')}</td>
+        <td>${escapeHtml(d.location || '—')}</td>
+        <td><span class="badge ${badgeClass}">${d.status || 'Idle'}</span></td>
+        <td><span style="color:var(--ink-faint);font-size:12px;">${fmtDate(d.updated_at)}</span></td>
+      </tr>`;
+  }).join('');
+  tbody.querySelectorAll('tr').forEach(tr=>{
+    tr.addEventListener('click', ()=> openModal(tr.getAttribute('data-id')));
+  });
+}
+
+/* ---------- MODAL FORM ---------- */
+function renderFormBody(record){
+  record = record || {};
+  const isViewer = userRole === 'viewer';
+  const inputDisabled = isViewer ? 'disabled' : '';
+  return `
+    <div id="missingBannerSlot"></div>
+    ${isViewer ? `<div class="delete-warning" style="background:var(--info-100);color:var(--info);"><strong>Report view:</strong> You can view and export data only. No edits allowed.</div>` : ''}
+
+    <div class="section-divider" style="margin-top:0;">Photo</div>
+    <div class="photo-upload-box" id="photoUploadBox" style="${isViewer ? 'cursor:default;opacity:0.7;' : ''}">
+      <div id="photoPreviewSlot">${record.photo_url ? `<img src="${escapeHtml(record.photo_url)}" class="photo-preview">` : ''}</div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
+      <div class="photo-upload-text">${record.photo_url ? 'Click to change photo' : 'Click to upload a device photo'}</div>
+      <input type="file" id="photoInput" accept="image/*" class="hidden" ${inputDisabled}>
+    </div>
+
+    <div class="section-divider">Identification</div>
+    <div class="field-row">
+      <div class="field-group"><label class="field-label">Category <span class="req">*</span></label>${selectHtml('f_category', CATEGORIES, record.category).replace('<select', `<select ${inputDisabled}`)}</div>
+      <div class="field-group"><label class="field-label">Status <span class="req">*</span></label>${selectHtml('f_status', STATUS_OPTIONS, record.status).replace('<select', `<select ${inputDisabled}`)}</div>
+    </div>
+    <div class="field-row">
+      <div class="field-group"><label class="field-label">Device name <span class="req">*</span></label><input type="text" id="f_device_name" placeholder="e.g. LAPTOP-FIN-014" value="${escapeHtml(record.device_name||'')}" ${inputDisabled}></div>
+      <div class="field-group"><label class="field-label">Company serial no. <span class="req">*</span></label><input type="text" id="f_company_serial_no" placeholder="e.g. SN-8821AX" value="${escapeHtml(record.company_serial_no||'')}" ${inputDisabled}></div>
+    </div>
+    <div class="field-row">
+      <div class="field-group"><label class="field-label">Model <span class="req">*</span></label><input type="text" id="f_model" placeholder="e.g. ThinkPad T14" value="${escapeHtml(record.model||'')}" ${inputDisabled}></div>
+      <div class="field-group"><label class="field-label">MAC address</label><input type="text" id="f_mac_address" placeholder="e.g. 00:1A:2B:3C:4D:5E or N/A" value="${escapeHtml(record.mac_address||'')}" ${inputDisabled}></div>
+    </div>
+
+    <div class="section-divider">Specifications</div>
+    <div class="field-row">
+      <div class="field-group"><label class="field-label">CPU <span class="req">*</span></label>${selectHtml('f_cpu', CPU_OPTIONS, record.cpu).replace('<select', `<select ${inputDisabled}`)}</div>
+      <div class="field-group"><label class="field-label">Generation</label>${selectHtml('f_generation', GENERATION_OPTIONS, record.generation).replace('<select', `<select ${inputDisabled}`)}</div>
+    </div>
+    <div class="field-row">
+      <div class="field-group"><label class="field-label">RAM <span class="req">*</span></label>${selectHtml('f_ram_gb', RAM_OPTIONS, record.ram_gb).replace('<select', `<select ${inputDisabled}`)}</div>
+      <div class="field-group"></div>
+    </div>
+    <div class="field-row">
+      <div class="field-group"><label class="field-label">SSD</label>${selectHtml('f_ssd', SSD_OPTIONS, record.ssd).replace('<select', `<select ${inputDisabled}`)}</div>
+      <div class="field-group"><label class="field-label">HDD</label>${selectHtml('f_hdd', HDD_OPTIONS, record.hdd).replace('<select', `<select ${inputDisabled}`)}</div>
+    </div>
+
+    <div class="section-divider">Ownership & location</div>
+    <div class="field-row">
+      <div class="field-group"><label class="field-label">Assigned user <span class="req">*</span></label><input type="text" id="f_user_name" placeholder="e.g. Ayesha Khan or N/A" value="${escapeHtml(record.user_name||'')}" ${inputDisabled}></div>
+      <div class="field-group"><label class="field-label">Domain ID</label><input type="text" id="f_domain_id" placeholder="e.g. akhan or N/A" value="${escapeHtml(record.domain_id||'')}" ${inputDisabled}></div>
+    </div>
+    <div class="field-row">
+      <div class="field-group"><label class="field-label">Department <span class="req">*</span></label>${selectHtml('f_department', DEPARTMENTS, record.department).replace('<select', `<select ${inputDisabled}`)}</div>
+      <div class="field-group"><label class="field-label">Location <span class="req">*</span></label>${selectHtml('f_location', LOCATIONS, record.location).replace('<select', `<select ${inputDisabled}`)}</div>
+    </div>
+
+    <div class="section-divider">Purchase & vendor</div>
+    <div class="field-row">
+      <div class="field-group"><label class="field-label">Vendor <span class="req">*</span></label><input type="text" id="f_vendor" placeholder="e.g. Dell Pakistan or N/A" value="${escapeHtml(record.vendor||'')}" ${inputDisabled}></div>
+      <div class="field-group"><label class="field-label">Purchase date <span class="req">*</span></label><input type="date" id="f_purchase_date" value="${record.purchase_date||''}" ${inputDisabled}></div>
+    </div>
+    <div class="field-row">
+      <div class="field-group"><label class="field-label">Warranty type</label>${selectHtml('f_warranty_type', WARRANTY_TYPES, record.warranty_type).replace('<select', `<select ${inputDisabled}`)}</div>
+      <div class="field-group"><label class="field-label">Warranty (years)</label><input type="text" id="f_warranty_years" placeholder="e.g. 3 or N/A" value="${escapeHtml(record.warranty_years||'')}" ${inputDisabled}></div>
+    </div>
+
+    <div class="section-divider">Notes</div>
+    <div class="field-group"><textarea id="f_notes" rows="2" placeholder="Any extra notes..." ${inputDisabled}>${escapeHtml(record.notes||'')}</textarea></div>
+  `;
+}
+
+function refreshMissingBanner(record){
+  const slot = document.getElementById('missingBannerSlot');
+  if(!slot) return;
+  if(!record){ slot.innerHTML=''; return; }
+  const missing = computeMissingFields(record);
+  if(missing.length === 0){ slot.innerHTML=''; return; }
+  slot.innerHTML = `<div class="delete-warning" style="background:var(--warn-100);color:var(--warn);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>This device is <strong>pending</strong>. Missing: ${missing.join(', ')}. Use N/A where a field genuinely doesn't apply.</div>`;
+}
+
+function openModal(id){
+  const record = id ? inventory.find(d=>d.id===id) : null;
+  document.getElementById('modalTitle').textContent = record ? `View device${userRole === 'admin' ? ' (Edit)' : ' (Report)'}` : 'Add device';
+  document.getElementById('deleteBtn').style.display = (record && userRole === 'admin') ? 'inline-flex' : 'none';
+  document.getElementById('saveBtn').style.display = userRole === 'admin' ? 'inline-flex' : 'none';
+  document.getElementById('cancelBtn').textContent = userRole === 'admin' ? 'Cancel' : 'Close';
+  
+  const body = document.getElementById('modalBody');
+  body.innerHTML = renderFormBody(record);
+  refreshMissingBanner(record);
+
+  if(record){
+    const viewHistoryBtn = document.createElement('button');
+    viewHistoryBtn.className = 'btn btn-sm';
+    viewHistoryBtn.style.marginBottom = '14px';
+    viewHistoryBtn.textContent = 'View history';
+    viewHistoryBtn.addEventListener('click', ()=> openHistoryModal(record.id, record.device_name));
+    body.insertBefore(viewHistoryBtn, body.firstChild.nextSibling);
+  }
+
+  editingId = record ? record.id : null;
+
+  if(userRole === 'admin'){
+    setTimeout(()=>{
+      const photoBox = document.getElementById('photoUploadBox');
+      const photoInput = document.getElementById('photoInput');
+      if(photoBox && photoInput){
+        photoBox.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); photoInput.click(); };
+        photoInput.onchange = (e)=>{
+          const file = e.target.files?.[0];
+          if(!file){ console.log('No file selected'); return; }
+          console.log('File selected:', file.name);
+          const reader = new FileReader();
+          reader.onload = (ev)=>{ 
+            const slot = document.getElementById('photoPreviewSlot');
+            if(slot) slot.innerHTML = `<img src="${ev.target.result}" class="photo-preview">`;
+            console.log('Photo preview loaded');
+          };
+          reader.onerror = ()=> console.error('Failed to read file');
+          reader.readAsDataURL(file);
+        };
+      }
+    }, 100);
+  }
+
+  document.getElementById('overlay').classList.add('open');
+}
+
+function closeModal(){ document.getElementById('overlay').classList.remove('open'); editingId = null; }
+
+function collectFormData(){
+  return {
+    category: document.getElementById('f_category').value,
+    status: document.getElementById('f_status').value,
+    device_name: document.getElementById('f_device_name').value.trim(),
+    company_serial_no: document.getElementById('f_company_serial_no').value.trim(),
+    model: document.getElementById('f_model').value.trim(),
+    mac_address: document.getElementById('f_mac_address').value.trim(),
+    cpu: document.getElementById('f_cpu').value,
+    generation: document.getElementById('f_generation').value,
+    ram_gb: document.getElementById('f_ram_gb').value,
+    hdd: document.getElementById('f_hdd').value,
+    ssd: document.getElementById('f_ssd').value,
+    user_name: document.getElementById('f_user_name').value.trim(),
+    domain_id: document.getElementById('f_domain_id').value.trim(),
+    department: document.getElementById('f_department').value,
+    location: document.getElementById('f_location').value,
+    vendor: document.getElementById('f_vendor').value.trim(),
+    purchase_date: document.getElementById('f_purchase_date').value || null,
+    warranty_type: document.getElementById('f_warranty_type').value,
+    warranty_years: document.getElementById('f_warranty_years').value.trim(),
+    notes: document.getElementById('f_notes').value.trim(),
+  };
+}
+
+async function handleSave(){
+  const data = collectFormData();
+  if(!data.device_name){ alert('Device name is required.'); return; }
+  if(!data.category){ alert('Please select a category.'); return; }
+  if(!data.status){ alert('Please select a status.'); return; }
+
+  data.is_complete = computeMissingFields(data).length === 0;
+  const now = new Date().toISOString();
+  const actor = currentUser ? currentUser.email : 'unknown';
+
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
+
+  if(editingId){
+    const before = inventory.find(d=>d.id===editingId);
+    const { error } = await sb.from('devices').update({ ...data, updated_at: now }).eq('id', editingId);
+    saveBtn.disabled = false; saveBtn.textContent = 'Save device';
+    if(error){ showToast('Save failed: ' + error.message); return; }
+
+    if(before && (before.user_name||'') !== (data.user_name||'')){
+      await sb.from('device_history').insert({ device_id: editingId, event_type: 'Transferred', from_user: before.user_name||null, to_user: data.user_name||null, from_status: before.status, to_status: data.status, note: 'Assigned user changed', changed_by: actor });
+    } else if(before && before.status !== data.status){
+      await sb.from('device_history').insert({ device_id: editingId, event_type: 'Status Change', from_user: data.user_name||null, to_user: data.user_name||null, from_status: before.status, to_status: data.status, note: 'Status updated', changed_by: actor });
+    }
+    showToast('Device updated');
+  } else {
+    const { data: inserted, error } = await sb.from('devices').insert({ ...data, created_at: now, updated_at: now }).select().single();
+    if(error){ saveBtn.disabled = false; saveBtn.textContent = 'Save device'; showToast('Save failed: ' + error.message); return; }
+    saveBtn.disabled = false; saveBtn.textContent = 'Save device';
+    await sb.from('device_history').insert({ device_id: inserted.id, event_type: 'Created', from_user: null, to_user: data.user_name||null, from_status: null, to_status: data.status, note: 'Device added to inventory', changed_by: actor });
+    showToast('Device added');
+  }
+
+  closeModal();
+  loadInventory();
+}
+
+function openDeleteConfirmation(){
+  if(!editingId) return;
+  const record = inventory.find(d=>d.id===editingId);
+  if(!record) return;
+  document.getElementById('deleteDeviceName').textContent = escapeHtml(record.device_name);
+  document.getElementById('deleteDeviceSerial').textContent = escapeHtml(record.company_serial_no || 'N/A');
+  document.getElementById('deletionReason').value = '';
+  document.getElementById('otherReason').value = '';
+  document.getElementById('otherReasonGroup').style.display = 'none';
+  pendingDeleteId = editingId;
+  document.getElementById('deleteConfirmOverlay').classList.add('open');
+}
+
+async function handleConfirmDelete(){
+  if(!pendingDeleteId) return;
+  const reason = document.getElementById('deletionReason').value;
+  if(!reason){ alert('Please select a reason for deletion.'); return; }
+  let finalReason = reason;
+  if(reason === 'Other'){
+    finalReason = document.getElementById('otherReason').value.trim();
+    if(!finalReason){ alert('Please specify the reason.'); return; }
+  }
+
+  const record = inventory.find(d=>d.id===pendingDeleteId);
+  const actor = currentUser ? currentUser.email : 'unknown';
+
+  const btn = document.getElementById('deleteConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Deleting...';
+
+  await sb.from('device_deletions').insert({
+    device_id: pendingDeleteId,
+    device_name: record.device_name,
+    deleted_by: actor,
+    deletion_reason: finalReason
+  });
+
+  const { error } = await sb.from('devices').delete().eq('id', pendingDeleteId);
+  btn.disabled = false; btn.textContent = 'Delete permanently';
+  if(error){ showToast('Delete failed: ' + error.message); return; }
+
+  showToast('Device deleted permanently');
+  document.getElementById('deleteConfirmOverlay').classList.remove('open');
+  closeModal();
+  loadInventory();
+  pendingDeleteId = null;
+}
+
+document.getElementById('deletionReason').addEventListener('change', (e)=>{
+  document.getElementById('otherReasonGroup').style.display = e.target.value === 'Other' ? 'block' : 'none';
+});
+
+/* ---------- HISTORY MODAL ---------- */
+async function openHistoryModal(deviceId, deviceName){
+  const body = document.getElementById('historyBody');
+  body.innerHTML = '<div class="loading-state">Loading history...</div>';
+  document.getElementById('historyOverlay').classList.add('open');
+  const { data, error } = await sb.from('device_history').select('*').eq('device_id', deviceId).order('created_at', { ascending: false });
+  if(error){ body.innerHTML = `<div style="color:red;font-size:13px;">Failed to load history: ${escapeHtml(error.message)}</div>`; return; }
+  if(!data || data.length === 0){ body.innerHTML = '<div class="empty-state"><p>No history recorded yet for this device.</p></div>'; return; }
+  body.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px;"><strong>${escapeHtml(deviceName||'Device')}</strong></p>` + data.map(h=>{
+    let sub = '';
+    if(h.event_type === 'Transferred') sub = `${h.from_user ? escapeHtml(h.from_user) : 'Unassigned'} → ${h.to_user ? escapeHtml(h.to_user) : 'Unassigned'}`;
+    else if(h.event_type === 'Status Change') sub = `${escapeHtml(h.from_status||'—')} → ${escapeHtml(h.to_status||'—')}`;
+    else if(h.event_type === 'Created') sub = `Assigned to ${h.to_user ? escapeHtml(h.to_user) : 'no one yet'}`;
+    return `<div class="history-item"><div class="history-dot"></div><div class="history-content"><div class="ht">${escapeHtml(h.event_type)}</div><div class="hs">${sub}${h.note ? ' · ' + escapeHtml(h.note) : ''}</div><div class="hd">${fmtDateTime(h.created_at)} · by ${escapeHtml(h.changed_by||'unknown')}</div></div></div>`;
+  }).join('');
+}
+
+document.getElementById('closeHistoryModal').addEventListener('click', ()=> document.getElementById('historyOverlay').classList.remove('open'));
+document.getElementById('historyOverlay').addEventListener('click', (e)=>{ if(e.target.id==='historyOverlay') document.getElementById('historyOverlay').classList.remove('open'); });
+
+/* ---------- EXPORT ---------- */
+function exportCSV(){
+  if(inventory.length === 0){ showToast('No devices to export yet.'); return; }
+  const headers = ['User Name','Department','Device Name','Category','CPU','Generation','RAM (GB)','HDD','SSD','Company Serial No.','Warranty Type','Warranty (Years)','Purchase Date','Vendor','Location','Domain ID','Model','MAC Address','Status','Notes'];
+  const rows = inventory.map(d=>[d.user_name,d.department,d.device_name,d.category,d.cpu,d.generation,d.ram_gb,d.hdd,d.ssd,d.company_serial_no,d.warranty_type,d.warranty_years,d.purchase_date,d.vendor,d.location,d.domain_id,d.model,d.mac_address,d.status,(d.notes||'').replace(/\n/g,' ')]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'it-inventory-export.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ---------- EVENTS ---------- */
+document.getElementById('addBtn').addEventListener('click', ()=>openModal(null));
+document.getElementById('closeModal').addEventListener('click', closeModal);
+document.getElementById('cancelBtn').addEventListener('click', closeModal);
+document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id==='overlay') closeModal(); });
+document.getElementById('saveBtn').addEventListener('click', handleSave);
+document.getElementById('deleteBtn').addEventListener('click', openDeleteConfirmation);
+document.getElementById('deleteCancel').addEventListener('click', ()=>{ document.getElementById('deleteConfirmOverlay').classList.remove('open'); pendingDeleteId = null; });
+document.getElementById('closeDeleteConfirm').addEventListener('click', ()=>{ document.getElementById('deleteConfirmOverlay').classList.remove('open'); pendingDeleteId = null; });
+document.getElementById('deleteConfirmBtn').addEventListener('click', handleConfirmDelete);
+document.getElementById('deleteConfirmOverlay').addEventListener('click', (e)=>{ if(e.target.id==='deleteConfirmOverlay'){ document.getElementById('deleteConfirmOverlay').classList.remove('open'); pendingDeleteId = null; } });
+document.getElementById('exportBtn').addEventListener('click', exportCSV);
+document.getElementById('searchInput').addEventListener('input', renderTable);
+document.getElementById('filterType').addEventListener('change', renderTable);
+document.getElementById('filterStatus').addEventListener('change', renderTable);
+document.getElementById('filterIncomplete').addEventListener('change', renderTable);
+document.getElementById('loginPassword').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('loginBtn').click(); });
+
+/* ---------- IMPORT EXCEL ---------- */
+const fileInput = document.getElementById('quickImport') || (() => {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.xlsx,.xls,.csv';
+  inp.id = 'quickImport';
+  inp.style.display = 'none';
+  document.body.appendChild(inp);
+  return inp;
+})();
+
+document.getElementById('importBtn').onclick = () => fileInput.click();
+
+fileInput.onchange = async (e) => {
+  const file = e.target.files?.[0];
+  if(!file) return;
+  
+  console.log('📁 File selected:', file.name);
+  
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    
+    console.log('✅ Parsed rows:', rows.length);
+    
+    if(rows.length === 0) { alert('No data found'); return; }
+    
+    const toInsert = rows.map((r, i) => {
+      let purchaseDate = r['Purchase Date'] || r['purchase_date'];
+      if(!purchaseDate || purchaseDate === 'N/A' || purchaseDate === '') purchaseDate = null;
+      
+      return {
+        device_name: r['Device Name'] || r['device_name'] || `Device-${i}`,
+        category: r['Category'] || r['category'] || 'Other',
+        status: r['Status'] || r['status'] || 'Active',
+        company_serial_no: r['Company Serial No.'] || r['company_serial_no'] || '',
+        model: r['Model'] || r['model'] || '',
+        user_name: r['User Name'] || r['user_name'] || '',
+        department: r['Department'] || r['department'] || '',
+        location: r['Location'] || r['location'] || '',
+        vendor: r['Vendor'] || r['vendor'] || '',
+        purchase_date: purchaseDate,
+        cpu: r['CPU'] || r['cpu'] || 'N/A',
+        ram_gb: r['RAM (GB)'] || r['ram_gb'] || 'N/A',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    });
+    
+    console.log('Inserting:', toInsert.length, 'devices');
+    const { data, error } = await sb.from('devices').insert(toInsert).select();
+    
+    if(error) {
+      console.error('❌ Error:', error);
+      alert('Error: ' + error.message);
+    } else {
+      console.log('✅ Imported:', data.length, 'devices');
+      alert('✅ ' + data.length + ' devices imported!');
+      loadInventory();
+    }
+  } catch(err) {
+    console.error('❌ Error:', err);
+    alert('Error: ' + err.message);
+  }
+};
+
+checkSession();
+</script>
+
+</body>
+</html>
