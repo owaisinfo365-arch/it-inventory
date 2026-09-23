@@ -32,6 +32,9 @@
   .login-field{margin-bottom:14px;}
   .login-field label{display:block;font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.03em;}
   .login-error{background:var(--danger-100);color:var(--danger);font-size:12.5px;font-weight:600;padding:9px 12px;border-radius:8px;margin-bottom:14px;}
+  .forgot-password-link{display:inline-block;margin-top:10px;font-size:12px;color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600;}
+  .forgot-password-link:hover{text-decoration:underline;}
+  .login-success{background:#E8F5E9;color:#2E7D32;font-size:12.5px;font-weight:600;padding:9px 12px;border-radius:8px;margin-bottom:14px;}
 
   .app{max-width:1180px;margin:0 auto;padding:20px 16px 80px;}
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap;}
@@ -159,6 +162,29 @@
     <div class="login-field"><label>Email</label><input type="email" id="loginEmail" placeholder="you@company.com"></div>
     <div class="login-field"><label>Password</label><input type="password" id="loginPassword" placeholder="Your password"></div>
     <button class="btn btn-primary" id="loginBtn" style="width:100%;justify-content:center;margin-top:6px;">Sign in</button>
+    <div style="text-align:center;"><a class="forgot-password-link" id="forgotPasswordLink">Forgot password?</a></div>
+  </div>
+</div>
+
+<div id="forgotPasswordModal" class="overlay hidden">
+  <div class="modal">
+    <div class="modal-head"><h2>Reset password</h2><button class="modal-close" id="closeForgotModal" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div id="forgotPasswordErrorBox"></div>
+      <div id="forgotPasswordSuccessBox"></div>
+      <p style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">Enter your email address and we'll send you a link to reset your password.</p>
+      <div class="field-group">
+        <label class="field-label">Email address</label>
+        <input type="email" id="forgotPasswordEmail" placeholder="you@company.com">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <div class="modal-foot-right">
+        <button class="btn" id="closeForgotBtn">Cancel</button>
+        <button class="btn btn-primary" id="sendResetBtn">Send reset link</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -353,6 +379,38 @@ document.getElementById('loginBtn').addEventListener('click', async ()=>{
   showApp();
 });
 document.getElementById('logoutBtn').addEventListener('click', async ()=>{ await sb.auth.signOut(); currentUser = null; showLogin(); });
+
+/* ---------- FORGOT PASSWORD ---------- */
+const forgotPasswordModal = document.getElementById('forgotPasswordModal');
+document.getElementById('forgotPasswordLink').addEventListener('click', ()=>{ forgotPasswordModal.classList.remove('hidden'); });
+document.getElementById('closeForgotModal').addEventListener('click', ()=>{ forgotPasswordModal.classList.add('hidden'); });
+document.getElementById('closeForgotBtn').addEventListener('click', ()=>{ forgotPasswordModal.classList.add('hidden'); });
+
+document.getElementById('sendResetBtn').addEventListener('click', async ()=>{
+  const email = document.getElementById('forgotPasswordEmail').value.trim();
+  const errBox = document.getElementById('forgotPasswordErrorBox');
+  const successBox = document.getElementById('forgotPasswordSuccessBox');
+  errBox.innerHTML = ''; successBox.innerHTML = '';
+  
+  if(!email){ errBox.innerHTML = '<div class="login-error">Please enter your email address.</div>'; return; }
+  
+  const btn = document.getElementById('sendResetBtn');
+  btn.disabled = true; btn.textContent = 'Sending...';
+  
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + '/reset-password.html'
+  });
+  
+  btn.disabled = false; btn.textContent = 'Send reset link';
+  
+  if(error){ 
+    errBox.innerHTML = `<div class="login-error">${escapeHtml(error.message)}</div>`; 
+  } else {
+    successBox.innerHTML = '<div class="login-success">✓ Reset link sent! Check your email and click the link within 24 hours.</div>';
+    document.getElementById('forgotPasswordEmail').value = '';
+    setTimeout(()=>{ forgotPasswordModal.classList.add('hidden'); }, 3000);
+  }
+});
 
 /* ---------- DATA ---------- */
 const REQUIRED_FOR_COMPLETE = ['category','status','device_name','company_serial_no','model','user_name','department','location','vendor','purchase_date','cpu','ram_gb'];
